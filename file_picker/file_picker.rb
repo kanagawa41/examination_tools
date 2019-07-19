@@ -3,12 +3,15 @@ require 'fileutils'
 class InvalidParameter < StandardError; end
 PairInfo = Struct.new(:jpg_path, :raw_path)
 
+DEFAULT_OUTPUT_FOLDER_NAME = 'dest'
+
 def usage
 <<"EOS"
 usage: file_picker [JPEG格納フォルダ] [RAW格納フォルダ] [出力先フォルダ]
 
 JPEG、RAWから同一の名前を持つファイルを抽出し、出力先フォルダにコピーします。
-出力先フォルダにファイルが存在する場合エラーとなります。
+出力先フォルダの指定がない場合は、同階層にフォルダ('#{DEFAULT_OUTPUT_FOLDER_NAME}')を作成し出力します。
+出力先フォルダにファイルが存在する場合は、'フォルダ名_日時'の形式でフォルダをリネームします。
 EOS
 end
 
@@ -27,16 +30,29 @@ def extract_file_basename(file_path)
 end
 
 def main
-  puts usage and return if ARGV.size.zero?
-  raise InvalidParameter.new('引数が少なすぎます。') if ARGV.size < 3
+  if ARGV.size.zero?
+    puts usage
+    return
+  end
+  raise InvalidParameter.new('引数が少なすぎます。') if ARGV.size < 2
+  raise InvalidParameter.new('引数が多すぎます。') if ARGV.size > 3
 
   jpg_folder_path = ARGV[0]
   valid_folder?(jpg_folder_path)
   raw_folder_path = ARGV[1]
   valid_folder?(raw_folder_path)
-  dest_folder_path = ARGV[2]
-  valid_folder?(dest_folder_path)
-  raise InvalidParameter.new("出力先(#{dest_folder_path})に既にファイルが存在します。") if Dir.glob("#{dest_folder_path}/*.*").size > 0
+  dest_folder_path = ARGV[2] || DEFAULT_OUTPUT_FOLDER_NAME
+
+  if !Dir.exist?(dest_folder_path)
+    FileUtils.mkdir_p(dest_folder_path)
+  elsif Dir.glob("#{dest_folder_path}/*.*").size > 0
+    # 既存のフォルダをリネーム
+    backup_name = "#{dest_folder_path}_#{Time.now.strftime('%Y%m%d%H%M%S')}"
+    File::rename(dest_folder_path, backup_name)
+    puts "出力先フォルダにファイルが存在するため #{dest_folder_path} -> #{backup_name} に変更しました。"
+    puts_step
+    FileUtils.mkdir_p(dest_folder_path)
+  end
 
   puts "JPEG格納フォルダ：#{jpg_folder_path}"
   puts "RAW格納フォルダ：#{raw_folder_path}"
